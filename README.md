@@ -4,6 +4,8 @@
 
 Pixel-perfect mouse picking with OpenGL stencil buffer.
 
+https://github.com/stripe2933/mouse-picking/assets/63503910/fa524657-2389-49c6-9b50-822088d3ff83
+
 ## Build
 
 ```shell
