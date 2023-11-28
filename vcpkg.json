@@ -1,0 +1,14 @@
+{
+  "name": "mouse-picking",
+  "version" : "0.1.0",
+  "dependencies": [
+    "glfw3",
+    "gl3w",
+    "glm",
+    "stb",
+    "fmt",
+    "range-v3",
+    { "name": "imgui", "features": ["glfw-binding", "opengl3-binding"] },
+    "imguizmo"
+  ]
+}
