@@ -15,7 +15,7 @@ mkdir build
 # You may don't need to specify CMAKE_TOOLCHAIN_FILE if you already have all dependencies.
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
-./build/mouse-picking
+./build/mouse_picking
 ```
 
 # Dependencies
