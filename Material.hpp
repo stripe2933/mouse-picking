@@ -6,6 +6,8 @@
 
 #include <GL/gl3w.h>
 
+#include <OGLWrapper/Texture.hpp>
+
 struct Material {
     OGLWrapper::Texture diffuse_map;
     OGLWrapper::Texture specular_map;
