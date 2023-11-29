@@ -51,7 +51,6 @@ class AppWindow final : public GlfwWindow {
     // View/projection related properties.
     static constexpr float camera_distance = 10.f;
     static constexpr glm::vec3 world_up { 0.f, 1.f, 0.f };
-    DirtyProperty<glm::vec3> target_position { glm::vec3 { 0.f } };
     DirtyProperty<glm::mat4> view;
 
     DirtyProperty<float> aspect { 1.f };

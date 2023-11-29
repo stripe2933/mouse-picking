@@ -69,9 +69,11 @@ void AppWindow::onKeyCallback(int key, int scancode, int action, int mods) {
 }
 
 void AppWindow::update(float time_delta) {
-    // If camera has velocity, i.e. user pressed WASD, update `target_position`.
+    // If camera has velocity, i.e. user pressed WASD, `view` should be also updated.
     if (camera_velocity) {
-        target_position = target_position.value() + camera_velocity.value() * time_delta;
+        glm::mat4 inv_view = inverse(view.value());
+        inv_view[3] += glm::vec4 { camera_velocity.value() * time_delta, 0.f };
+        view = inverse(inv_view);
     }
 
     // Rotate models along their rotation axis.
@@ -79,12 +81,12 @@ void AppWindow::update(float time_delta) {
         model = rotate(model, time_delta, rotation_axis);
     }
 
-    // If `target_position` changed, `view` should be also updated.
-    target_position.clean([&](const glm::vec3 &target_position) {
-        const glm::mat4 inv_view = inverse(view.value());
-        const glm::vec3 eye = target_position - camera_distance * OGLWrapper::Helper::Camera::getFront(inv_view);
-        view = lookAt(eye, target_position, world_up);
-    });
+    // // If `target_position` changed, `view` should be also updated.
+    // target_position.clean([&](const glm::vec3 &target_position) {
+    //     const glm::mat4 inv_view = inverse(view.value());
+    //     const glm::vec3 eye = target_position - camera_distance * OGLWrapper::Helper::Camera::getFront(inv_view);
+    //     view = lookAt(eye, target_position, world_up);
+    // });
 
     // If either `fov` or `aspect` changed, `projection` should be also updated.
     DirtyPropertyHelper::clean([&](float fov, float aspect) {
@@ -236,8 +238,8 @@ GpuFacetedMesh<VertexPNT> AppWindow::loadCubeMesh() {
 AppWindow::AppWindow() : GlfwWindow { 640, 640, "Mouse picking" },
                          cube_mesh { loadCubeMesh() },
                          view { lookAt(
-                             target_position.value() - camera_distance * normalize(glm::vec3 { -1.f }) /* initial view direction */,
-                             target_position.value(),
+                             camera_distance * normalize(glm::vec3 { 1.f }),
+                             glm::vec3 { 0.f },
                              world_up) }
 {
     initImGui();
