@@ -6,6 +6,7 @@
     "gl3w",
     "glm",
     "stb",
+    "eventpp",
     "fmt",
     "range-v3",
     { "name": "imgui", "features": ["glfw-binding", "opengl3-binding"] },

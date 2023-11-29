@@ -16,10 +16,11 @@ find_package(imguizmo CONFIG REQUIRED)
 
 include(FetchContent)
 
+message(STATUS "Fetching OGLWrapper...")
 FetchContent_Declare(
     OGLWrapper
     GIT_REPOSITORY https://github.com/stripe2933/OGLWrapper.git
-    GIT_TAG main
+    GIT_TAG 4863981
 )
 FetchContent_MakeAvailable(OGLWrapper)
 

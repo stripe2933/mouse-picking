@@ -19,15 +19,15 @@
 #include <range/v3/view.hpp>
 #include <range/v3/range/conversion.hpp>
 
-void AppWindow::onFramebufferSizeCallback(glm::ivec2 size) {
+void AppWindow::onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size) {
     aspect = static_cast<float>(size.x) / static_cast<float>(size.y);
 }
 
-void AppWindow::onScrollCallback(glm::dvec2 offset) {
+void AppWindow::onScrollCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 offset) {
     fov = std::clamp(fov.value() + static_cast<float>(offset.y), 1.f, 179.f);
 }
 
-void AppWindow::onCursorPosCallback(glm::dvec2 position) {
+void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 position) {
     ImGuiIO &io = ImGui::GetIO();
     io.AddMousePosEvent(position.x, position.y);
     if (io.WantCaptureMouse){
@@ -46,7 +46,7 @@ void AppWindow::onCursorPosCallback(glm::dvec2 position) {
     glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, &hovered_index);
 }
 
-void AppWindow::onKeyCallback(int key, int scancode, int action, int mods) {
+void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
         const glm::mat4 inv_view = inverse(view.value());
         const glm::vec3 right = OGLWrapper::Helper::Camera::getRight(inv_view);
@@ -235,7 +235,7 @@ GpuFacetedMesh<VertexPNT> AppWindow::loadCubeMesh() {
         .transferToGpu({ 0, 1, 2 }, OGLWrapper::BufferUsage::StaticDraw);
 }
 
-AppWindow::AppWindow() : GlfwWindow { 640, 640, "Mouse picking" },
+AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
                          cube_mesh { loadCubeMesh() },
                          view { lookAt(
                              camera_distance * normalize(glm::vec3 { 1.f }),
@@ -244,6 +244,11 @@ AppWindow::AppWindow() : GlfwWindow { 640, 640, "Mouse picking" },
 {
     initImGui();
     initModels();
+
+    framebuffer_size_callback.append(std::bind_front(&AppWindow::onFramebufferSizeCallback, this));
+    scroll_callback.append(std::bind_front(&AppWindow::onScrollCallback, this));
+    cursor_pos_callback.append(std::bind_front(&AppWindow::onCursorPosCallback, this));
+    key_callback.append(std::bind_front(&AppWindow::onKeyCallback, this));
 
     // Set texture.
     glUseProgram(primary_program.handle);

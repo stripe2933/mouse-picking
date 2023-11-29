@@ -10,7 +10,7 @@
 #include <OGLWrapper/Program.hpp>
 #include <OGLWrapper/OpenGLContext.hpp>
 #include <OGLWrapper/Helper/Image.hpp>
-#include <OGLWrapper/GLFW/GlfwWindow.hpp>
+#include <OGLWrapper/GLFW/Window.hpp>
 
 #include <glm/ext/matrix_float4x4.hpp>
 
@@ -20,24 +20,24 @@
 #include "Mesh.hpp"
 #include "Material.hpp"
 
-class AppWindow final : public GlfwWindow {
+class AppWindow final : public OGLWrapper::GLFW::Window {
     // This struct should be at the top of the class declaration, because it is intended to be initialized before
     // the constructor.
     OGLWrapper::OpenGLContext context {};
 
-    const OGLWrapper::Shader<OGLWrapper::ShaderType::Vertex> vertex_shader { std::filesystem::path { "shaders/pnt.vert"} };
+    const OGLWrapper::VertexShader vertex_shader { "shaders/pnt.vert" };
     const OGLWrapper::Program primary_program {
         vertex_shader,
-        OGLWrapper::Shader<OGLWrapper::ShaderType::Fragment> {std::filesystem::path { "shaders/blinn_phong.frag"} }
+        OGLWrapper::FragmentShader { "shaders/blinn_phong.frag" }
     };
     const OGLWrapper::Program outliner_program {
         vertex_shader,
-        OGLWrapper::Shader<OGLWrapper::ShaderType::Fragment> {std::filesystem::path { "shaders/solid.frag"} }
+        OGLWrapper::FragmentShader { "shaders/solid.frag" }
     };
 
     const Material wood {
-        Image { "assets/textures/container2.png" }.toTexture(),
-        Image { "assets/textures/container2_specular.png" }.toTexture(),
+        Image { "assets/textures/container2.png" }.toTexture({}),
+        Image { "assets/textures/container2_specular.png" }.toTexture({}),
     };
 
     GpuFacetedMesh<VertexPNT> cube_mesh;
@@ -58,10 +58,10 @@ class AppWindow final : public GlfwWindow {
     DirtyProperty<glm::mat4> projection;
 
     // Window event handlers.
-    void onFramebufferSizeCallback(glm::ivec2 size) override;
-    void onScrollCallback(glm::dvec2 offset) override;
-    void onCursorPosCallback(glm::dvec2 position) override;
-    void onKeyCallback(int key, int scancode, int action, int mods) override;
+    void onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size);
+    void onScrollCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 offset);
+    void onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 position);
+    void onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods);
 
     // Render loop related functions.
     std::optional<glm::vec3> camera_velocity;
