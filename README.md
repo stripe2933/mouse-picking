@@ -15,7 +15,7 @@ mkdir build
 # You may don't need to specify CMAKE_TOOLCHAIN_FILE if you already have all dependencies.
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
-./build/mouse-picking
+./build/mouse_picking
 ```
 
 # Dependencies
@@ -24,4 +24,4 @@ cmake --build build --config Release
 - range-v3
 - imgui
 - imguizmo
-- [OGLWrapper](https://github.com/stripe2933/OGLWrapper) - gl3w, glfw, glm, stb_image
+- [OGLWrapper](https://github.com/stripe2933/OGLWrapper) - gl3w, glfw, glm, stb_image, eventpp
