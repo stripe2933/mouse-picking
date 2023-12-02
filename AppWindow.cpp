@@ -157,9 +157,6 @@ void AppWindow::draw() const {
         const glm::mat4 scaled_model = scale(models[hovered_index], glm::vec3 { scale_factor });
         glUniformMatrix4fv(outliner_program.getUniformLocation("model"), 1, GL_FALSE, value_ptr(scaled_model));
 
-        const glm::mat4 inv_model = inverse(scaled_model);
-        glUniformMatrix4fv(outliner_program.getUniformLocation("inv_model"), 1, GL_FALSE, value_ptr(inv_model));
-
         cube_mesh.draw();
 
         // Settings should be restored for next render loop.
