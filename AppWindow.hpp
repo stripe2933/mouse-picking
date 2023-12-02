@@ -25,14 +25,13 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     // the constructor.
     OGLWrapper::OpenGLContext context {};
 
-    const OGLWrapper::VertexShader vertex_shader { "shaders/pnt.vert" };
     const OGLWrapper::Program primary_program {
-        vertex_shader,
-        OGLWrapper::FragmentShader { "shaders/blinn_phong.frag" }
+        OGLWrapper::VertexShader { "shaders/cube.vert" },
+        OGLWrapper::FragmentShader { "shaders/cube.frag" }
     };
     const OGLWrapper::Program outliner_program {
-        vertex_shader,
-        OGLWrapper::FragmentShader { "shaders/solid.frag" }
+        OGLWrapper::VertexShader { "shaders/outliner.vert" },
+        OGLWrapper::FragmentShader { "shaders/outliner.frag" }
     };
 
     const Material wood {
