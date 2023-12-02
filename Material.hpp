@@ -9,15 +9,15 @@
 #include <OGLWrapper/Texture.hpp>
 
 struct Material {
-    OGLWrapper::Texture diffuse_map;
-    OGLWrapper::Texture specular_map;
+    OGLWrapper::Texture<GL_TEXTURE_2D> diffuse_map;
+    OGLWrapper::Texture<GL_TEXTURE_2D> specular_map;
 
     void setTexture(GLenum diffuse_unit, GLenum specular_unit) const {
         // TODO: texture unit should be GL_TEXTURE0 ~ GL_TEXTURE15
 
         glActiveTexture(diffuse_unit);
-        glBindTexture(GL_TEXTURE_2D, diffuse_map.handle);
+        diffuse_map.bind();
         glActiveTexture(specular_unit);
-        glBindTexture(GL_TEXTURE_2D, specular_map.handle);
+        specular_map.bind();
     }
 };

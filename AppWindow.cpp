@@ -20,11 +20,11 @@
 #include <range/v3/range/conversion.hpp>
 
 void AppWindow::onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size) {
-    aspect = static_cast<float>(size.x) / static_cast<float>(size.y);
+    aspect = getFramebufferAspectRatio();
 }
 
 void AppWindow::onScrollCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 offset) {
-    fov = std::clamp(fov.value() + static_cast<float>(offset.y), 1.f, 179.f);
+    fov = std::clamp(fov.value() + static_cast<float>(offset.y), 15.f, 150.f);
 }
 
 void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 position) {
@@ -49,15 +49,15 @@ void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 posi
 void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
         const glm::mat4 inv_view = inverse(view.value());
+        const glm::vec3 front = OGLWrapper::Helper::Camera::getFront(inv_view);
         const glm::vec3 right = OGLWrapper::Helper::Camera::getRight(inv_view);
-        const glm::vec3 up = OGLWrapper::Helper::Camera::getUp(inv_view);
 
         constexpr float speed = 2.f;
         camera_velocity = [&]() -> std::optional<glm::vec3> {
             switch (key) {
-                case GLFW_KEY_W: return speed * up;
+                case GLFW_KEY_W: return speed * front;
                 case GLFW_KEY_A: return speed * -right;
-                case GLFW_KEY_S: return speed * -up;
+                case GLFW_KEY_S: return speed * -front;
                 case GLFW_KEY_D: return speed * right;
                 default: return std::nullopt;
             }
@@ -81,13 +81,6 @@ void AppWindow::update(float time_delta) {
         model = rotate(model, time_delta, rotation_axis);
     }
 
-    // // If `target_position` changed, `view` should be also updated.
-    // target_position.clean([&](const glm::vec3 &target_position) {
-    //     const glm::mat4 inv_view = inverse(view.value());
-    //     const glm::vec3 eye = target_position - camera_distance * OGLWrapper::Helper::Camera::getFront(inv_view);
-    //     view = lookAt(eye, target_position, world_up);
-    // });
-
     // If either `fov` or `aspect` changed, `projection` should be also updated.
     DirtyPropertyHelper::clean([&](float fov, float aspect) {
         projection = glm::perspective(glm::radians(fov), aspect, 1e-2f, 100.f);
@@ -99,13 +92,14 @@ void AppWindow::update(float time_delta) {
         const glm::vec3 view_pos = OGLWrapper::Helper::Camera::getPosition(inv_view);
         const glm::mat4 projection_view = projection * view;
 
-        glUseProgram(primary_program.handle);
-        glUniformMatrix4fv(primary_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
-        glUniform3fv(primary_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
-
-        glUseProgram(outliner_program.handle);
-        glUniformMatrix4fv(outliner_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
-        glUniform3fv(outliner_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
+        primary_program.pendUniforms([&, projection_view, view_pos]() {
+            glUniformMatrix4fv(primary_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
+            glUniform3fv(primary_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
+        });
+        outliner_program.pendUniforms([&, projection_view, view_pos]() {
+            glUniformMatrix4fv(outliner_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
+            glUniform3fv(outliner_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
+        });
     }, view, projection);
 }
 
@@ -136,7 +130,7 @@ void AppWindow::updateImGui(float time_delta) {
 void AppWindow::draw() const {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    glUseProgram(primary_program.handle);
+    primary_program.use();
     for (auto &&[idx, model] : models | ranges::views::enumerate) {
         glUniformMatrix4fv(primary_program.getUniformLocation("model"), 1, GL_FALSE, value_ptr(model));
 
@@ -149,7 +143,7 @@ void AppWindow::draw() const {
 
     if (hovered_index != no_hover_index) {
         // If there is a mesh under the cursor (retrieved by stencil test), draw it with slightly scaled model.
-        glUseProgram(outliner_program.handle);
+        outliner_program.use();
 
         // The stencil function set to GL_NOTEQUAL with reference value = hovered_index will pass only scaled fragments
         // (i.e. outline) of the mesh.
@@ -218,21 +212,18 @@ void AppWindow::initModels() {
         | ranges::to_vector;
 }
 
-GpuFacetedMesh<VertexPNT> AppWindow::loadCubeMesh() {
+OGLWrapper::Helper::GpuMesh<VertexPNT> AppWindow::loadCubeMesh() {
     // TODO: use proper format (e.g. .obj)
     std::ifstream cube_file { "assets/models/cube.txt" };
     assert(cube_file.is_open());
 
     std::vector<VertexPNT> vertices;
-    for (VertexPNT vertex;
-        cube_file >> vertex.position.x >> vertex.position.y >> vertex.position.z
-                  >> vertex.normal.x >> vertex.normal.y >> vertex.normal.z
-                  >> vertex.texcoords.x >> vertex.texcoords.y;) {
+    for (VertexPNT vertex; cube_file >> vertex;) {
         vertices.push_back(vertex);
     }
 
-    return FacetedMesh { std::move(vertices) }
-        .transferToGpu({ 0, 1, 2 }, OGLWrapper::BufferUsage::StaticDraw);
+    return OGLWrapper::Helper::Mesh { std::move(vertices) }
+        .transferToGpu({ 0, 1, 2 }, GL_STATIC_DRAW);
 }
 
 AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
@@ -240,7 +231,7 @@ AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
                          view { lookAt(
                              camera_distance * normalize(glm::vec3 { 1.f }),
                              glm::vec3 { 0.f },
-                             world_up) }
+                             glm::vec3 { 0.f, 1.f, 0.f }) }
 {
     initImGui();
     initModels();
@@ -251,9 +242,10 @@ AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
     key_callback.append(std::bind_front(&AppWindow::onKeyCallback, this));
 
     // Set texture.
-    glUseProgram(primary_program.handle);
-    glUniform1i(primary_program.getUniformLocation("diffuse_map"), 0);
-    glUniform1i(primary_program.getUniformLocation("specular_map"), 1);
+    primary_program.pendUniforms([&]() {
+        glUniform1i(primary_program.getUniformLocation("diffuse_map"), 0);
+        glUniform1i(primary_program.getUniformLocation("specular_map"), 1);
+    });
     wood.setTexture(GL_TEXTURE0, GL_TEXTURE1);
 
     // Enable OpenGL features.

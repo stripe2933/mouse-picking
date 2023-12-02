@@ -24,4 +24,4 @@ cmake --build build --config Release
 - range-v3
 - imgui
 - imguizmo
-- [OGLWrapper](https://github.com/stripe2933/OGLWrapper) - gl3w, glfw, glm, stb_image
+- [OGLWrapper](https://github.com/stripe2933/OGLWrapper) - gl3w, glfw, glm, stb_image, eventpp

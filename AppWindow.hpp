@@ -10,14 +10,14 @@
 #include <OGLWrapper/Program.hpp>
 #include <OGLWrapper/OpenGLContext.hpp>
 #include <OGLWrapper/Helper/Image.hpp>
+#include <OGLWrapper/Helper/Mesh.hpp>
 #include <OGLWrapper/GLFW/Window.hpp>
 
 #include <glm/ext/matrix_float4x4.hpp>
 
 #include <DirtyProperty.hpp>
 
-#include "VertexPNT.hpp"
-#include "Mesh.hpp"
+#include "Vertex.hpp"
 #include "Material.hpp"
 
 class AppWindow final : public OGLWrapper::GLFW::Window {
@@ -36,11 +36,11 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     };
 
     const Material wood {
-        Image { "assets/textures/container2.png" }.toTexture({}),
-        Image { "assets/textures/container2_specular.png" }.toTexture({}),
+        OGLWrapper::Helper::Image { "assets/textures/container2.png" }.toTexture<GL_TEXTURE_2D>(),
+        OGLWrapper::Helper::Image { "assets/textures/container2_specular.png" }.toTexture<GL_TEXTURE_2D>(),
     };
 
-    GpuFacetedMesh<VertexPNT> cube_mesh;
+    OGLWrapper::Helper::GpuMesh<VertexPNT> cube_mesh;
 
     static constexpr std::uint8_t no_hover_index = 0xFF;
     std::uint8_t hovered_index = no_hover_index;
@@ -50,7 +50,7 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
 
     // View/projection related properties.
     static constexpr float camera_distance = 10.f;
-    static constexpr glm::vec3 world_up { 0.f, 1.f, 0.f };
+    std::optional<glm::vec3> camera_velocity;
     DirtyProperty<glm::mat4> view;
 
     DirtyProperty<float> aspect { 1.f };
@@ -64,8 +64,6 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     void onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods);
 
     // Render loop related functions.
-    std::optional<glm::vec3> camera_velocity;
-
     void update(float time_delta);
     void updateImGui(float time_delta);
     void draw() const;
@@ -75,7 +73,7 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     void initImGui();
     void initModels();
 
-    static GpuFacetedMesh<VertexPNT> loadCubeMesh();
+    static OGLWrapper::Helper::GpuMesh<VertexPNT> loadCubeMesh();
 
 public:
     AppWindow();
