@@ -20,7 +20,7 @@ message(STATUS "Fetching OGLWrapper...")
 FetchContent_Declare(
     OGLWrapper
     GIT_REPOSITORY https://github.com/stripe2933/OGLWrapper.git
-    GIT_TAG 1a5e1e1
+    GIT_TAG 2e33e9d
 )
 FetchContent_MakeAvailable(OGLWrapper)
 

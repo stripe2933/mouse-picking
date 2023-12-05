@@ -19,7 +19,32 @@
 #include <range/v3/view.hpp>
 #include <range/v3/range/conversion.hpp>
 
+template <>
+struct OGLWrapper::Helper::VertexAttributes<glm::mat4> {
+    std::array<GLuint, 4> columns;
+
+    void setVertexAttribArrays() const {
+        for (auto [idx, attribute] : columns | ranges::views::enumerate) {
+            glEnableVertexAttribArray(attribute);
+            glVertexAttribPointer(
+                attribute,
+                4,
+                GL_FLOAT,
+                GL_FALSE,
+                sizeof(glm::mat4),
+                reinterpret_cast<const void *>(sizeof(glm::vec4) * idx));
+        }
+    }
+
+    void setVertexAttribDivisors() const {
+        for (GLuint attribute : columns) {
+            glVertexAttribDivisor(attribute, 1);
+        }
+    }
+};
+
 void AppWindow::onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size) {
+    recreateFramebuffer(size);
     aspect = getFramebufferAspectRatio();
 }
 
@@ -43,7 +68,8 @@ void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 posi
     const glm::ivec2 opengl_cursor_position { framebuffer_cursor_position.x, framebuffer_size.y - framebuffer_cursor_position.y };
 
     // Read stencil value at the cursor position, store into hovered_index.
-    glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, &hovered_index);
+    framebuffer.bind();
+    glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &hovered_index);
 }
 
 void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods) {
@@ -68,6 +94,54 @@ void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode
     }
 }
 
+void AppWindow::recreateFramebuffer(glm::ivec2 size) {
+    color_attachment = [&size]() {
+        OGLWrapper::Texture<GL_TEXTURE_2D> texture{};
+        texture.bind();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, size.x, size.y, 0, GL_RGB, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        return texture;
+    }();
+    framebuffer.attachTexture(GL_COLOR_ATTACHMENT0, color_attachment);
+
+    depth_attachment = [&size]() {
+        OGLWrapper::Renderbuffer renderbuffer{};
+        renderbuffer.bind();
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size.x, size.y);
+
+        return renderbuffer;
+    }();
+    framebuffer.attachRenderbuffer(GL_DEPTH_ATTACHMENT, depth_attachment);
+
+    instance_id_attachment = [&size]() {
+        OGLWrapper::Texture<GL_TEXTURE_2D> texture{};
+        texture.bind();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, size.x, size.y, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        return texture;
+    }();
+    framebuffer.attachTexture(GL_COLOR_ATTACHMENT1, instance_id_attachment);
+
+    assert(framebuffer.isComplete());
+    glViewport(0, 0, size.x, size.y);
+
+    // Only instance_id_attachment will be read.
+    glReadBuffer(GL_COLOR_ATTACHMENT1);
+
+    // color_attachment and instance_id_attachment will be used in fragment shader.
+    constexpr std::array<GLuint, 2> attachments { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(attachments.size(), attachments.data());
+
+    glActiveTexture(GL_TEXTURE2);
+    color_attachment.bind();
+    glActiveTexture(GL_TEXTURE3);
+    instance_id_attachment.bind();
+}
+
 void AppWindow::update(float time_delta) {
     // If camera has velocity, i.e. user pressed WASD, `view` should be also updated.
     if (camera_velocity) {
@@ -80,6 +154,9 @@ void AppWindow::update(float time_delta) {
     for (auto &&[model, rotation_axis] : ranges::views::zip(models, rotation_axes)) {
         model = rotate(model, time_delta, rotation_axis);
     }
+    std::get<0>(cube_instanced_mesh.instance_buffers)
+        .getSubBuffer()
+        .store(models);
 
     // If either `fov` or `aspect` changed, `projection` should be also updated.
     DirtyPropertyHelper::clean([&](float fov, float aspect) {
@@ -89,17 +166,11 @@ void AppWindow::update(float time_delta) {
     // If either `view` or `projection` changed, shader's `projection_view` should be also updated.
     DirtyPropertyHelper::clean([&](const glm::mat4 &view, const glm::mat4 &projection) {
         const glm::mat4 inv_view = inverse(view);
-        const glm::vec3 view_pos = OGLWrapper::Helper::Camera::getPosition(inv_view);
-        const glm::mat4 projection_view = projection * view;
-
-        primary_program.pendUniforms([&, projection_view, view_pos]() {
-            glUniformMatrix4fv(primary_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
-            glUniform3fv(primary_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
-        });
-        outliner_program.pendUniforms([&, projection_view, view_pos]() {
-            glUniformMatrix4fv(outliner_program.getUniformLocation("vp_matrix.projection_view"), 1, GL_FALSE, value_ptr(projection_view));
-            glUniform3fv(outliner_program.getUniformLocation("vp_matrix.view_pos"), 1, value_ptr(view_pos));
-        });
+        const VpMatrix vp_matrix {
+            .projection_view = projection * view,
+            .view_pos = OGLWrapper::Helper::Camera::getPosition(inv_view)
+        };
+        vp_matrix_ubo.getSubBuffer().store(std::span{ &vp_matrix, 1 });
     }, view, projection);
 }
 
@@ -128,39 +199,41 @@ void AppWindow::updateImGui(float time_delta) {
 }
 
 void AppWindow::draw() const {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    // Pass 1: draw instanced cubes into `framebuffer`.
+    // Each mesh's instance id will be also recorded in `instance_id_attachment`.
+    framebuffer.bind();
+    // Clear color_attachment and depth_attachment.
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Clear instance_id_attachment.
+    constexpr GLuint no_hover_index_color = 0xFF;
+    glClearBufferuiv(GL_COLOR, 1, &no_hover_index_color);
+    // Use program and draw instanced mesh.
+    primary_instanced_program.use();
+    cube_instanced_mesh.draw(125);
 
-    primary_program.use();
-    for (auto &&[idx, model] : models | ranges::views::enumerate) {
-        glUniformMatrix4fv(primary_program.getUniformLocation("model"), 1, GL_FALSE, value_ptr(model));
-
-        const glm::mat4 inv_model = inverse(model);
-        glUniformMatrix4fv(primary_program.getUniformLocation("inv_model"), 1, GL_FALSE, value_ptr(inv_model));
-
-        glStencilFunc(GL_ALWAYS, static_cast<GLint>(idx), 0xFF);
-        cube_mesh.draw();
-    }
+    // Pass 2: draw screen-filling quad with `color_attachment` as texture into default framebuffer.
+    OGLWrapper::Framebuffer<GL_FRAMEBUFFER>::restoreToDefault();
+    glDisable(GL_DEPTH_TEST);
+    glClear(GL_COLOR_BUFFER_BIT);
+    full_quad_program.use();
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glEnable(GL_DEPTH_TEST);
 
     if (hovered_index != no_hover_index) {
         // If there is a mesh under the cursor (retrieved by stencil test), draw it with slightly scaled model.
-        outliner_program.use();
-
-        // The stencil function set to GL_NOTEQUAL with reference value = hovered_index will pass only scaled fragments
-        // (i.e. outline) of the mesh.
-        glStencilFunc(GL_NOTEQUAL, static_cast<GLint>(hovered_index), no_hover_index);
-        glStencilMask(0x00);
-        glDisable(GL_DEPTH_TEST);
-
         constexpr float scale_factor = 1.05f;
 
         assert(hovered_index < models.size());
         const glm::mat4 scaled_model = scale(models[hovered_index], glm::vec3 { scale_factor });
-        glUniformMatrix4fv(outliner_program.getUniformLocation("model"), 1, GL_FALSE, value_ptr(scaled_model));
+
+        glDisable(GL_DEPTH_TEST);
+        outliner_instanced_program.use();
+        glUniform1ui(outliner_instanced_program.getUniformLocation("instance_id"), hovered_index);
+        glUniformMatrix4fv(outliner_instanced_program.getUniformLocation("model"), 1, GL_FALSE, value_ptr(scaled_model));
 
         cube_mesh.draw();
 
         // Settings should be restored for next render loop.
-        glStencilMask(0xFF);
         glEnable(GL_DEPTH_TEST);
     }
 }
@@ -214,17 +287,38 @@ OGLWrapper::Helper::GpuMesh<VertexPNT> AppWindow::loadCubeMesh() {
     std::ifstream cube_file { "assets/models/cube.txt" };
     assert(cube_file.is_open());
 
-    std::vector<VertexPNT> vertices;
-    for (VertexPNT vertex; cube_file >> vertex;) {
-        vertices.push_back(vertex);
-    }
-
+    std::vector<VertexPNT> vertices { std::istream_iterator<VertexPNT> { cube_file }, {} };
     return OGLWrapper::Helper::Mesh { std::move(vertices) }
         .transferToGpu({ 0, 1, 2 }, GL_STATIC_DRAW);
 }
 
+GpuInstancedMesh<VertexPNT, glm::mat4> AppWindow::loadCubeInstancedMesh() {
+    std::ifstream cube_file { "assets/models/cube.txt" };
+    assert(cube_file.is_open());
+
+    OGLWrapper::VertexArray vao{};
+    vao.bind();
+
+    OGLWrapper::Buffer<GL_ARRAY_BUFFER, VertexPNT> vbo { GL_STATIC_DRAW };
+    std::vector<VertexPNT> vertices { std::istream_iterator<VertexPNT> { cube_file }, {} };
+    vbo.store(vertices);
+
+    OGLWrapper::Helper::VertexAttributes<VertexPNT>{ 0, 1, 2 }
+        .setVertexAttribArrays();
+
+    OGLWrapper::Buffer<GL_ARRAY_BUFFER, glm::mat4> ibo { GL_STREAM_DRAW };
+    ibo.reserve(125 /* models.size() */);
+
+    constexpr OGLWrapper::Helper::VertexAttributes<glm::mat4> instance_attributes { 3, 4, 5, 6 };
+    instance_attributes.setVertexAttribArrays();
+    instance_attributes.setVertexAttribDivisors();
+
+    return { .vertex_array = std::move(vao),
+        .vertex_buffer = std::move(vbo),
+        .instance_buffers = std::move(ibo) };
+}
+
 AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
-                         cube_mesh { loadCubeMesh() },
                          view { lookAt(
                              camera_distance * normalize(glm::vec3 { 1.f }),
                              glm::vec3 { 0.f },
@@ -238,25 +332,27 @@ AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
     cursor_pos_callback.append(std::bind_front(&AppWindow::onCursorPosCallback, this));
     key_callback.append(std::bind_front(&AppWindow::onKeyCallback, this));
 
-    // Set texture.
-    primary_program.pendUniforms([&]() {
-        glUniform1i(primary_program.getUniformLocation("diffuse_map"), 0);
-        glUniform1i(primary_program.getUniformLocation("specular_map"), 1);
+    // Configure framebuffer.
+    recreateFramebuffer(getFramebufferSize());
+
+    // Set active textures.
+    primary_instanced_program.pendUniforms([&]() {
+        glUniform1i(primary_instanced_program.getUniformLocation("diffuse_map"), 0);
+        glUniform1i(primary_instanced_program.getUniformLocation("specular_map"), 1);
+    });
+    full_quad_program.pendUniforms([&]() {
+        glUniform1i(full_quad_program.getUniformLocation("screen_texture"), 2);
     });
     wood.setTexture(GL_TEXTURE0, GL_TEXTURE1);
 
-    // Enable OpenGL features.
-    glEnable(GL_DEPTH_TEST);
+    outliner_instanced_program.pendUniforms([&]() {
+        glUniform1i(outliner_instanced_program.getUniformLocation("instance_id_texture"), 3);
+    });
 
-    glEnable(GL_CULL_FACE);
-
-    // At first, stencil buffer will filled with `no_hover_index`.
-    // At draw call, stencil buffer will be filled with `idx` if the fragment is drawn and depth test is passed.
-    // After that, we can retrieve the index of the mesh under the cursor by reading stencil buffer.
-    glEnable(GL_STENCIL_TEST);
-    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-    glStencilMask(0xFF);
-    glClearStencil(no_hover_index);
+    // Set VpMatrix.
+    vp_matrix_ubo.reserve(1);
+    OGLWrapper::Program::setUniformBlockBindings("VpMatrix", 0, primary_instanced_program, outliner_instanced_program);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, vp_matrix_ubo.handle);
 }
 
 AppWindow::~AppWindow() {
