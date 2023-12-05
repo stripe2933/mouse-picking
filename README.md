@@ -5,6 +5,9 @@
 Pixel-perfect mouse picking with OpenGL stencil buffer.
 If you want another mouse picking example with custom FBO + instancing, see [instancing branch](https://github.com/stripe2933/mouse-picking/tree/instancing). It unlimits the available object count in this branch (255 at max).
 
+- If you want another mouse picking example with custom FBO + instancing, see [instancing branch](https://github.com/stripe2933/mouse-picking/tree/instancing). It unlimits the available object count in this branch (255 at max).
+- If you want to see the same work implemented in Vulkan, see [here](https://github.com/stripe2933/VulkanMousePicking).
+
 https://github.com/stripe2933/mouse-picking/assets/63503910/fa524657-2389-49c6-9b50-822088d3ff83
 
 ## Build
