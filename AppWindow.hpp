@@ -54,17 +54,17 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     OGLWrapper::Helper::GpuMesh<VertexPNT> cube_mesh { loadCubeMesh() };
     GpuInstancedMesh<VertexPNT, glm::mat4> cube_instanced_mesh { loadCubeInstancedMesh() };
 
-    static constexpr std::size_t num_cube_in_side = 6;
+    static constexpr std::size_t num_cube_in_side = 20;
     static constexpr std::size_t num_total_cubes = num_cube_in_side * num_cube_in_side * num_cube_in_side;
-    static constexpr std::uint8_t no_hover_index = 0xFF;
+    static constexpr std::uint16_t no_hover_index = 0xFFFF;
     static_assert(num_total_cubes < no_hover_index);
-    std::uint8_t hovered_index = no_hover_index;
+    std::uint16_t hovered_index = no_hover_index;
 
     std::vector<glm::vec3> rotation_axes;
     std::vector<glm::mat4> models;
 
     // View/projection related properties.
-    static constexpr float camera_distance = 10.f;
+    static constexpr float camera_distance = 30.f;
     std::optional<glm::vec3> camera_velocity;
     DirtyProperty<glm::mat4> view;
 

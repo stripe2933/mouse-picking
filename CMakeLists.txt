@@ -9,6 +9,7 @@ add_executable(mouse_picking
 target_compile_features(mouse_picking PRIVATE cxx_std_20)
 target_include_directories(mouse_picking PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extlibs)
 
+find_package(OpenMP REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(range-v3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -26,6 +27,7 @@ FetchContent_MakeAvailable(OGLWrapper)
 
 target_link_libraries(mouse_picking PRIVATE
     OGLWrapper
+    OpenMP::OpenMP_CXX
     imgui::imgui imguizmo::imguizmo
     fmt::fmt range-v3::range-v3
 )

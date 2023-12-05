@@ -71,7 +71,7 @@ void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 posi
     // Read stencil value at the cursor position, store into hovered_index.
     framebuffer.bind();
     glReadBuffer(GL_COLOR_ATTACHMENT1);
-    glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &hovered_index);
+    glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_SHORT, &hovered_index);
 }
 
 void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods) {
@@ -126,7 +126,7 @@ void AppWindow::recreateFramebuffer(glm::ivec2 size) {
         glActiveTexture(GL_TEXTURE3);
         texture.bind();
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, size.x, size.y, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, size.x, size.y, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -151,9 +151,11 @@ void AppWindow::update(float time_delta) {
     }
 
     // Rotate models along their rotation axis.
-    for (auto &&[model, rotation_axis] : ranges::views::zip(models, rotation_axes)) {
-        model = rotate(model, time_delta, rotation_axis);
+#pragma omp parallel for default(none) shared(models, rotation_axes, time_delta)
+    for (std::size_t i = 0; i < num_total_cubes; ++i) {
+        models[i] = rotate(models[i], time_delta, rotation_axes[i]);
     }
+
     std::get<0>(cube_instanced_mesh.instance_buffers)
         .getSubBuffer()
         .store(models);
@@ -232,7 +234,7 @@ void AppWindow::draw() const {
     // Clear color_attachment and depth_attachment.
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // Clear instance_id_attachment.
-    constexpr GLuint no_hover_index_color = 0xFF;
+    constexpr GLuint no_hover_index_color = no_hover_index;
     glClearBufferuiv(GL_COLOR, 1, &no_hover_index_color);
     // Use program and draw instanced mesh.
     primary_instanced_program.use();
@@ -298,7 +300,7 @@ void AppWindow::initImGui() {
 }
 
 void AppWindow::initModels() {
-    constexpr auto linspace = ranges::views::linear_distribute(-2.f, 2.f, num_cube_in_side);
+    constexpr auto linspace = ranges::views::linear_distribute(-10.f, 10.f, num_cube_in_side);
 
     static constexpr glm::mat4 identity = glm::identity<glm::mat4>();
     models =
