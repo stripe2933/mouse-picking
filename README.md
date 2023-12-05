@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Pixel-perfect mouse picking with OpenGL stencil buffer.
+If you want another mouse picking example with custom FBO + instancing, see [instancing branch](https://github.com/stripe2933/mouse-picking/tree/instancing). It unlimits the available object count in this branch (255 at max).
 
 https://github.com/stripe2933/mouse-picking/assets/63503910/fa524657-2389-49c6-9b50-822088d3ff83
 
