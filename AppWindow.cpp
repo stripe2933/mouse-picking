@@ -236,7 +236,7 @@ void AppWindow::draw() const {
     glClearBufferuiv(GL_COLOR, 1, &no_hover_index_color);
     // Use program and draw instanced mesh.
     primary_instanced_program.use();
-    cube_instanced_mesh.draw(125);
+    cube_instanced_mesh.draw(num_total_cubes);
 
     // Pass 2: blit framebuffer into default framebuffer.
     glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer.handle);
@@ -298,8 +298,7 @@ void AppWindow::initImGui() {
 }
 
 void AppWindow::initModels() {
-    // Each meshes are positioned at the 3d grid of [-2, -1, 0, 1, 2]^3.
-    constexpr auto linspace = ranges::views::linear_distribute(-2.f, 2.f, 5);
+    constexpr auto linspace = ranges::views::linear_distribute(-2.f, 2.f, num_cube_in_side);
 
     static constexpr glm::mat4 identity = glm::identity<glm::mat4>();
     models =
@@ -340,7 +339,7 @@ GpuInstancedMesh<VertexPNT, glm::mat4> AppWindow::loadCubeInstancedMesh() {
         .setVertexAttribArrays();
 
     OGLWrapper::Buffer<GL_ARRAY_BUFFER, glm::mat4> ibo { GL_STREAM_DRAW };
-    ibo.reserve(125 /* models.size() */);
+    ibo.reserve(num_total_cubes);
 
     constexpr OGLWrapper::Helper::VertexAttributes<glm::mat4> instance_attributes { 3, 4, 5, 6 };
     instance_attributes.setVertexAttribArrays();
