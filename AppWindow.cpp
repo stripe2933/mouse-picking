@@ -43,12 +43,13 @@ struct OGLWrapper::Helper::VertexAttributes<glm::mat4> {
     }
 };
 
-void AppWindow::onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size) {
-    recreateFramebuffer(size);
-    aspect = getFramebufferAspectRatio();
-}
-
 void AppWindow::onScrollCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 offset) {
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMouseWheelEvent(offset.x, offset.y);
+    if (io.WantCaptureMouse){
+        return;
+    }
+
     fov = std::clamp(fov.value() + static_cast<float>(offset.y), 15.f, 150.f);
 }
 
@@ -69,6 +70,7 @@ void AppWindow::onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 posi
 
     // Read stencil value at the cursor position, store into hovered_index.
     framebuffer.bind();
+    glReadBuffer(GL_COLOR_ATTACHMENT1);
     glReadPixels(opengl_cursor_position.x, opengl_cursor_position.y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &hovered_index);
 }
 
@@ -97,7 +99,10 @@ void AppWindow::onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode
 void AppWindow::recreateFramebuffer(glm::ivec2 size) {
     color_attachment = [&size]() {
         OGLWrapper::Texture<GL_TEXTURE_2D> texture{};
+
+        glActiveTexture(GL_TEXTURE2);
         texture.bind();
+
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, size.x, size.y, 0, GL_RGB, GL_FLOAT, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -117,7 +122,10 @@ void AppWindow::recreateFramebuffer(glm::ivec2 size) {
 
     instance_id_attachment = [&size]() {
         OGLWrapper::Texture<GL_TEXTURE_2D> texture{};
+
+        glActiveTexture(GL_TEXTURE3);
         texture.bind();
+
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, size.x, size.y, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -129,17 +137,9 @@ void AppWindow::recreateFramebuffer(glm::ivec2 size) {
     assert(framebuffer.isComplete());
     glViewport(0, 0, size.x, size.y);
 
-    // Only instance_id_attachment will be read.
-    glReadBuffer(GL_COLOR_ATTACHMENT1);
-
     // color_attachment and instance_id_attachment will be used in fragment shader.
     constexpr std::array<GLuint, 2> attachments { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(attachments.size(), attachments.data());
-
-    glActiveTexture(GL_TEXTURE2);
-    color_attachment.bind();
-    glActiveTexture(GL_TEXTURE3);
-    instance_id_attachment.bind();
 }
 
 void AppWindow::update(float time_delta) {
@@ -211,13 +211,19 @@ void AppWindow::draw() const {
     primary_instanced_program.use();
     cube_instanced_mesh.draw(125);
 
-    // Pass 2: draw screen-filling quad with `color_attachment` as texture into default framebuffer.
-    OGLWrapper::Framebuffer<GL_FRAMEBUFFER>::restoreToDefault();
-    glDisable(GL_DEPTH_TEST);
-    glClear(GL_COLOR_BUFFER_BIT);
-    full_quad_program.use();
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glEnable(GL_DEPTH_TEST);
+    // Pass 2: blit framebuffer into default framebuffer.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer.handle);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    constexpr std::array<GLenum, 1> attachments { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(attachments.size(), attachments.data());
+
+    const glm::ivec2 framebuffer_size = getFramebufferSize();
+    glBlitFramebuffer(
+        0, 0, framebuffer_size.x, framebuffer_size.y,
+        0, 0, framebuffer_size.x, framebuffer_size.y,
+        GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     if (hovered_index != no_hover_index) {
         // If there is a mesh under the cursor (retrieved by stencil test), draw it with slightly scaled model.
@@ -327,7 +333,14 @@ AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
     initImGui();
     initModels();
 
-    framebuffer_size_callback.append(std::bind_front(&AppWindow::onFramebufferSizeCallback, this));
+    framebuffer_size_callback.append([this](OGLWrapper::GLFW::EventArg&, glm::ivec2) {
+        // When framebuffer size changed, aspect ratio should be also updated.
+        aspect = getFramebufferAspectRatio();
+    });
+    framebuffer_size_callback.append([this](OGLWrapper::GLFW::EventArg&, glm::ivec2 size) {
+        // When using instancing (using multiple fbos), user-made fbo's attachment size should be also updated.
+        recreateFramebuffer(size);
+    });
     scroll_callback.append(std::bind_front(&AppWindow::onScrollCallback, this));
     cursor_pos_callback.append(std::bind_front(&AppWindow::onCursorPosCallback, this));
     key_callback.append(std::bind_front(&AppWindow::onKeyCallback, this));
@@ -336,23 +349,23 @@ AppWindow::AppWindow() : Window { 640, 640, "Mouse picking", {} },
     recreateFramebuffer(getFramebufferSize());
 
     // Set active textures.
+    wood.setTexture(GL_TEXTURE0, GL_TEXTURE1);
     primary_instanced_program.pendUniforms([&]() {
         glUniform1i(primary_instanced_program.getUniformLocation("diffuse_map"), 0);
         glUniform1i(primary_instanced_program.getUniformLocation("specular_map"), 1);
     });
-    full_quad_program.pendUniforms([&]() {
-        glUniform1i(full_quad_program.getUniformLocation("screen_texture"), 2);
-    });
-    wood.setTexture(GL_TEXTURE0, GL_TEXTURE1);
-
     outliner_instanced_program.pendUniforms([&]() {
         glUniform1i(outliner_instanced_program.getUniformLocation("instance_id_texture"), 3);
     });
 
     // Set VpMatrix.
     vp_matrix_ubo.reserve(1);
-    OGLWrapper::Program::setUniformBlockBindings("VpMatrix", 0, primary_instanced_program, outliner_instanced_program);
+    OGLWrapper::Program::setUniformBlockBindings("VpMatrix", 0,
+        primary_instanced_program, outliner_instanced_program);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, vp_matrix_ubo.handle);
+
+    // Enable OpenGL features.
+    glEnable(GL_CULL_FACE);
 }
 
 AppWindow::~AppWindow() {

@@ -36,10 +36,6 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
         OGLWrapper::VertexShader { "shaders/cube_instanced.vert" },
         OGLWrapper::FragmentShader { "shaders/cube_instanced.frag" }
     };
-    const OGLWrapper::Program full_quad_program {
-        OGLWrapper::VertexShader { "shaders/full_quad.vert" },
-        OGLWrapper::FragmentShader { "shaders/full_quad.frag" }
-    };
     const OGLWrapper::Program outliner_instanced_program {
         OGLWrapper::VertexShader { "shaders/outliner_instanced.vert" },
         OGLWrapper::FragmentShader { "shaders/outliner_instanced.frag" }
@@ -76,7 +72,6 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
     OGLWrapper::Buffer<GL_UNIFORM_BUFFER, VpMatrix> vp_matrix_ubo { GL_DYNAMIC_DRAW };
 
     // Window event handlers.
-    void onFramebufferSizeCallback(OGLWrapper::GLFW::EventArg&, glm::ivec2 size);
     void onScrollCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 offset);
     void onCursorPosCallback(OGLWrapper::GLFW::EventArg&, glm::dvec2 position);
     void onKeyCallback(OGLWrapper::GLFW::EventArg&, int key, int scancode, int action, int mods);
