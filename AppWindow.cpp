@@ -108,6 +108,34 @@ void AppWindow::updateImGui(float time_delta) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+
+    constexpr std::size_t num_frame_times = 1 << 8;
+    static std::vector fps_record(num_frame_times, 0.f);
+    static float fps_average = 0.f;
+    static std::size_t current_idx = 0;
+
+    fps_record[current_idx] = 1.f / time_delta;
+    if (++current_idx == fps_record.size()) {
+        current_idx = 0;
+        fps_average = std::reduce(fps_record.cbegin(), fps_record.cend()) / fps_record.size();
+    }
+
+    ImGui::Begin("Inspector");
+
+    if (static bool vsync = true; ImGui::Checkbox("Enable V-Sync", &vsync)) {
+        glfwSwapInterval(vsync ? 1 : 0);
+    }
+    ImGui::PlotLines("FPS", fps_record.data(), fps_record.size());
+    ImGui::Text("Average FPS: %.1f", fps_average);
+
+    if (static glm::vec3 outline_color { 1.f, 0.5f, 0.2f }; ImGui::ColorEdit3("Outline color", value_ptr(outline_color))) {
+        outliner_program.pendUniforms([& /* outline_color is in static lifetime: no need to value capture */]() {
+            glUniform3fv(outliner_program.getUniformLocation("color"), 1, value_ptr(outline_color));
+        });
+    }
+
+    ImGui::End();
+
     ImGuizmo::BeginFrame();
 
     // Clone the view matrix and pass it to ImGuizmo.
