@@ -41,7 +41,10 @@ class AppWindow final : public OGLWrapper::GLFW::Window {
 
     OGLWrapper::Helper::GpuMesh<VertexPNT> cube_mesh;
 
+    static constexpr std::size_t num_cube_in_side = 6;
+    static constexpr std::size_t num_cubes = num_cube_in_side * num_cube_in_side * num_cube_in_side;
     static constexpr std::uint8_t no_hover_index = 0xFF;
+    static_assert(num_cubes < no_hover_index);
     std::uint8_t hovered_index = no_hover_index;
 
     std::vector<glm::vec3> rotation_axes;

@@ -220,8 +220,7 @@ void AppWindow::initImGui() {
 }
 
 void AppWindow::initModels() {
-    // Each meshes are positioned at the 3d grid of [-2, -1, 0, 1, 2]^3.
-    constexpr auto linspace = ranges::views::linear_distribute(-2.f, 2.f, 5);
+    constexpr auto linspace = ranges::views::linear_distribute(-2.f, 2.f, num_cube_in_side);
 
     static constexpr glm::mat4 identity = glm::identity<glm::mat4>();
     models =
